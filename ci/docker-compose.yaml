@@ -1,0 +1,17 @@
+services:
+  static-analysis:
+    build:
+      context: ${CONTEXT}
+      dockerfile: ci/Dockerfile.static-analysis
+    volumes:
+      - ${PWD}:/app
+    environment:
+      - HOME=/app/ci
+
+  build-bin:
+    image: golang:1.23.2-alpine3.20 
+    volumes:
+      - ${PWD}:/app
+    working_dir: /app
+    entrypoint: go build -o ./bin/sqlson main.go
+  
