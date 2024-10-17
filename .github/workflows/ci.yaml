@@ -1,0 +1,23 @@
+name: CI Workflow
+
+on:
+  push:
+    branches:
+      - '**'  # This matches all branches
+
+jobs:
+  static-analysis:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Run Static Analysis
+        run: make static-analysis
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Run linux build
+        run: make build
