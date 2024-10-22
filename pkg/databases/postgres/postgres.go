@@ -2,12 +2,14 @@ package postgres
 
 import (
 	"fmt"
+	"strings"
 
+	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
-	"gorm.io/driver/postgres"
- 
-  "github.com/korbajan/sqlson/internal/configs"
+
+	"github.com/korbajan/sqlson/internal/configs"
+	"github.com/korbajan/sqlson/pkg/databases/dberrors"
 )
 
 
@@ -68,6 +70,12 @@ func (pg *PostgresExecutor) PrepareDBConnection() error {
     Logger: logger.Discard, // Silences all gorm logs
   })
   if err != nil {
+    if strings.Contains(err.Error(), "SQLSTATE 3D000") {
+      return dberrors.NewDBCheckTypeError(err)
+    }
+    if strings.Contains(err.Error(), "SQLSTATE 28P01") {
+      return dberrors.NewDBCheckTypeError(err)
+    }
     return err
   }
   pg.db = db

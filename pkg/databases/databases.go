@@ -2,11 +2,13 @@ package databases
 
 import (
 	"fmt"
-  "log"
+	"log"
+  "errors"
 
-  "github.com/korbajan/sqlson/internal/configs"
-  "github.com/korbajan/sqlson/pkg/databases/postgres"
-  "github.com/korbajan/sqlson/pkg/databases/mysql"
+	"github.com/korbajan/sqlson/internal/configs"
+	"github.com/korbajan/sqlson/pkg/databases/dberrors"
+	"github.com/korbajan/sqlson/pkg/databases/mysql"
+	"github.com/korbajan/sqlson/pkg/databases/postgres"
 )
 
 // DatabaseType represents the type of database
@@ -26,10 +28,14 @@ type QueryExecutor interface {
 }
 
 func CheckDatabaseType(postgresExecuter QueryExecutor, mysqlExecuter QueryExecutor) (DatabaseType, string, error) {
+  var checkTypeError dberrors.DBCheckTypeError
   // Try connecting to PostgreSQL
   err := postgresExecuter.PrepareDBConnection()
   if err == nil {
     return PostgreSQL, postgresExecuter.GetVersion(), nil
+  }
+  if errors.As(err, &checkTypeError) {
+    return PostgreSQL, "", err
   }
 
   // If it fails, try connecting to MySQL/MariaDB
