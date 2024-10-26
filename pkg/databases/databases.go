@@ -2,7 +2,6 @@ package databases
 
 import (
 	"fmt"
-	"log"
   "errors"
 
 	"github.com/korbajan/sqlson/internal/configs"
@@ -11,62 +10,29 @@ import (
 	"github.com/korbajan/sqlson/pkg/databases/postgres"
 )
 
-// DatabaseType represents the type of database
-type DatabaseType int
-
-const (
-  Unknown DatabaseType = iota
-  PostgreSQL
-  MySQL
-)
-
-type QueryExecutor interface {
-  GetDSN() string
-  PrepareDBConnection() error
+type ExecutorConnection interface {
   GetVersion() string
-  Execute(string) (string, error)
+  RunQuery(string) (string, error)
 }
 
-func CheckDatabaseType(postgresExecuter QueryExecutor, mysqlExecuter QueryExecutor) (DatabaseType, string, error) {
-  var checkTypeError dberrors.DBCheckTypeError
+func NewExecutorConnection(databaseConfig *configs.Database) (ExecutorConnection, error) { // or perhaps a generic instead of interface?
+  
+  var getExecutorError dberrors.NewExecutorError
+  var c ExecutorConnection
   // Try connecting to PostgreSQL
-  err := postgresExecuter.PrepareDBConnection()
+  c, err := postgres.NewExecutor(databaseConfig) 
   if err == nil {
-    return PostgreSQL, postgresExecuter.GetVersion(), nil
+    return c, nil
   }
-  if errors.As(err, &checkTypeError) {
-    return PostgreSQL, "", err
+  if errors.As(err, &getExecutorError) {
+    return nil, err
   }
 
   // If it fails, try connecting to MySQL/MariaDB
-  err = mysqlExecuter.PrepareDBConnection()
+  c, err = mysql.NewExecutor(databaseConfig) 
   if err == nil {
-    return MySQL, mysqlExecuter.GetVersion(), nil
+    return c, nil
   }
-  return Unknown, "", fmt.Errorf("could not determine database type: %v", err)
+  return nil, fmt.Errorf("could not determine database type: %v", err)
 }
 
-func Execute(databaseConfig *configs.Database, sqlQuery string) (string, error) {
-  
-  var executor QueryExecutor
-
-  postgresExecuter := postgres.NewExecutor(databaseConfig)
-  mysqlExecuter := mysql.NewExecutor(databaseConfig)
-
-  dbType, _, err := CheckDatabaseType(postgresExecuter, mysqlExecuter)
-  if err != nil {
-    log.Fatal(err)
-    return "", err
-  }
- 
-  switch dbType {
-    case PostgreSQL:
-      executor = postgresExecuter
-    case MySQL:
-      executor = mysqlExecuter
-    default:
-      log.Fatal("Unknown database type.")
-    }
-
-  return executor.Execute(sqlQuery)
-}

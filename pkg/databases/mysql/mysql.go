@@ -3,24 +3,19 @@ package mysql
 import (
   "encoding/json"
 	"fmt"
+  "strings"
   
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 	"gorm.io/driver/mysql"
 
 	"github.com/korbajan/sqlson/internal/configs"
+	"github.com/korbajan/sqlson/pkg/databases/dberrors"
 )
 
-type MysqlExecutor struct {
-  host string
-  port int
-  user string
-  password string
-  databaseName string
+type MysqlExecutorConnection struct {
   db *gorm.DB
-  dbVersion string
 }
-
 
 const (
   DefaultHost = "localhost"
@@ -28,60 +23,47 @@ const (
   DefaultUser = "root"
 )
 
-func NewExecutor(databaseConfig *configs.Database) *MysqlExecutor {
-  host := databaseConfig.Host
+func NewExecutor(databaseConfig *configs.Database) (*MysqlExecutorConnection, error) {
   if databaseConfig.Host == "" {
-    host = DefaultHost
+    databaseConfig.Host = DefaultHost
   }
-  port := databaseConfig.Port
   if databaseConfig.Port == 0 {
-    port = DefaultPort
+    databaseConfig.Port = DefaultPort
   }
-  user := databaseConfig.User
   if databaseConfig.User == "" {
-    host = DefaultHost
+    databaseConfig.User = DefaultUser
   }
-  
-  return &MysqlExecutor{
-    host: host,
-    port: port,
-    user: user,
-    databaseName: databaseConfig.Name,
-    password: databaseConfig.Password,
-  }
-  
-}
-func (msql *MysqlExecutor) GetDSN() string {
-  return fmt.Sprintf(
+  dsn := fmt.Sprintf(
     "%s:%s@tcp(%s:%d)/%s",
-    msql.user,
-    msql.password,
-    msql.host,
-    msql.port,
-    msql.databaseName,
+    databaseConfig.User,
+    databaseConfig.Password,
+    databaseConfig.Host,
+    databaseConfig.Port,
+    databaseConfig.Name,
   )
-}
 
-func (msql *MysqlExecutor) PrepareDBConnection() error {
-  db, err := gorm.Open(mysql.Open(msql.GetDSN()), &gorm.Config{
+  db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{
     Logger: logger.Discard, // Silences all gorm logs
   })
+
+  //TODO: switch-case in separate common/generic function???
   if err != nil {
-    return err
-  }
-  msql.db = db
-  return nil
-}
-// Function to execute a raw SQL query and return results in JSON format
-func (mysql *MysqlExecutor) Execute(sqlQuery string) (string, error) {
-  if mysql.db == nil {
-    err := mysql.PrepareDBConnection()
-    if err != nil {
-      return "", err
+    if strings.Contains(err.Error(), "SQLSTATE 3D000") {
+      return nil, dberrors.CreateNewExecutorError(err)
     }
+    if strings.Contains(err.Error(), "SQLSTATE 28P01") {
+      return nil, dberrors.CreateNewExecutorError(err)
+    }
+    return nil, err
   }
+  
+  return &MysqlExecutorConnection{db: db}, nil
+}
+
+// Function to execute a raw SQL query and return results in JSON format
+func (c *MysqlExecutorConnection) RunQuery(sqlQuery string) (string, error) {
   // Execute the raw SQL query
-  rows, err := mysql.db.Raw(sqlQuery).Rows()
+  rows, err := c.db.Raw(sqlQuery).Rows()
   if err != nil {
     return "", err
   }
@@ -132,10 +114,12 @@ func (mysql *MysqlExecutor) Execute(sqlQuery string) (string, error) {
     return "", err
   }
 
+  // return jsonData, nil or perhaps Writer could be better?
   return string(jsonData), nil
 }
     
-func (msql *MysqlExecutor) GetVersion() string {
-  msql.db.Raw("SELECT version();").Scan(&msql.dbVersion)
-  return msql.dbVersion
+func (c *MysqlExecutorConnection) GetVersion() string {
+  var version string
+  c.db.Raw("SELECT version();").Scan(&version)
+  return version
 }

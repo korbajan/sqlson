@@ -17,7 +17,14 @@ func Execute() {
   databaseConfig := configs.NewDatabaseConfig()
   var sqlQuery string
   parseFromArgs(&databaseConfig, &sqlQuery)
-  jsonString, err := databases.Execute(&databaseConfig, sqlQuery)
+  
+
+  executorConnection, err := databases.NewExecutorConnection(&databaseConfig)
+  if err != nil {
+    fmt.Println(err)
+    os.Exit(1)
+  }
+  jsonString, err := executorConnection.RunQuery(sqlQuery)
   if err != nil {
     fmt.Println(err)
     os.Exit(1)
